@@ -194,5 +194,4 @@ if __name__ == "__main__":
     infobox = get_infobox_from_html(html)
     book = book_from_infobox(infobox, search_str)
     print(book)
-    # search_wikipedia_curl("cat's cradle book")
 
