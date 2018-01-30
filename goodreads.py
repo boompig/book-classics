@@ -1,24 +1,29 @@
 from __future__ import print_function
-import requests
-from argparse import ArgumentParser
-import xml.etree.ElementTree as ET
-import os
-from Levenshtein import distance
-from typing import Iterator, List, Optional
-import logging
+
 # from pprint import pprint
 import csv
+import logging
+import os
+import xml.etree.ElementTree as ET
+from argparse import ArgumentParser
 
+import coloredlogs
+import requests
+from Levenshtein import distance
+from typing import Iterator, List, Optional
 
 from goodreads_secrets import key
+
+coloredlogs.install()
 
 
 def search_for_book(title: str):
     """:return ET.Element"""
     if not os.path.exists("data"):
         os.mkdir("data")
-
-    goodreads_cache_fname = "data/{}-goodreads-cache.xml".format(
+    if not os.path.exists("data/goodreads-cache"):
+        os.mkdir("data/goodreads-cache")
+    goodreads_cache_fname = "data/goodreads-cache/{}.xml".format(
         title.lower().replace(" ", "_")
     )
 
@@ -130,20 +135,29 @@ def setup_logging(verbose=True):
         logging.getLogger(module).setLevel(logging.WARNING)
 
 
-def resolve_via_human(relevant_books: List[dict]):
-    print("Found %d good results" % len(relevant_books))
+def resolve_via_human(query: str, relevant_books: List[dict]):
+    print("Found {} good results for '{}'".format(
+        len(relevant_books),
+        query
+    ))
     for i, book in enumerate(relevant_books):
         print("{}. {title} (by {author})".format(
             i + 1, title=book["title"], author=book["author"]
         ))
     answer = ""
-    while answer == "" or not answer.isdigit():
+    while answer == "" or not answer.isdigit() or answer == "0":
         answer = input("Which is the right one? ")
-    return relevant_books[int(answer)]
+    return relevant_books[int(answer) - 1]
 
 
 def save_chosen_books(person: str, chosen_books: List[dict]):
-    fname = "data/{}-picks.csv".format(person.lower().replace(" ", "_"))
+    dir = "data/resolved-picks"
+    if not os.path.exists(dir):
+        os.mkdir(dir)
+    fname = "{dir}/{person}.csv".format(
+        dir=dir,
+        person=person.lower().replace(" ", "_")
+    )
     with open(fname, "w") as fp:
         writer = csv.writer(fp, quotechar='"', delimiter=',')
         writer.writerow(["title", "author", "year"])
@@ -177,10 +191,9 @@ if __name__ == "__main__":
                 # pprint(candidate)
             else:
                 logging.debug("No obviously correct book")
-                candidate = resolve_via_human(relevant_books)
+                candidate = resolve_via_human(book, relevant_books)
                 # print(candidate)
             chosen_books.append(candidate)
     # create the candidates pool
     save_chosen_books(args.person, chosen_books)
-
 
