@@ -81,13 +81,15 @@ def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
             # logging.debug("Skipping title")
             continue
 
-    logging.debug("Before filtering step, found %d relevant results" % len(relevant_books))
+    logging.debug("Before filtering step, found {} relevant results".format(
+        len(relevant_books)))
     # filter out those that don't have that many ratings compared to leading candidates
     max_num_ratings = 0
     for b in relevant_books:
         if b.num_ratings > max_num_ratings:
             max_num_ratings = b.num_ratings
-    relevant_books = [b for b in relevant_books if b.num_ratings >= (max_num_ratings / 100) ]
+    relevant_books = [b for b in relevant_books
+                      if b.num_ratings >= (max_num_ratings / 100)]
     logging.debug("Found %d relevant results" % len(relevant_books))
     return relevant_books
 
@@ -118,7 +120,8 @@ def get_obviously_correct_book(relevant_books: List[GoodreadsBook]) -> Optional[
             continue
         if b.num_ratings * 100 > target.num_ratings:
             return None
-    # here we have a runaway winner, so just need to check that it has a good string similarity
+    # here we have a runaway winner
+    # so just need to check that it has a good string similarity
     if target.str_distance < 10:
         return target
     else:
@@ -146,7 +149,11 @@ def save_chosen_books(person: str, chosen_books: List[GoodreadsBook]) -> None:
         writer = csv.writer(fp, quotechar='"', delimiter=',')
         writer.writerow(["title", "author", "year"])
         for book in chosen_books:
-            writer.writerow([book.title, book.author, book.original_publication_year])
+            writer.writerow([
+                book.title,
+                book.author,
+                book.original_publication_year
+            ])
     logging.info("Saved choices in %s" % fname)
 
 
@@ -172,9 +179,9 @@ def confirm(msg: str) -> bool:
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("-p", "--person", required=True,
-        help="The person whose book picks these are")
+                        help="The person whose book picks these are")
     parser.add_argument("-f", "--book-file", required=True,
-        help="File which contains names of books, one per line")
+                        help="File which contains names of books, one per line")
     parser.add_argument("-q", "--quiet", action="store_true")
     args = parser.parse_args()
     setup_logging(not args.quiet)
@@ -208,4 +215,3 @@ if __name__ == "__main__":
             chosen_books.append(candidate)
     # create the candidates pool
     save_chosen_books(args.person, chosen_books)
-
