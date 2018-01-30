@@ -12,8 +12,8 @@ import requests
 from Levenshtein import distance
 from typing import Iterator, List, Optional
 
-from goodreads_secrets import key
 from book import GoodreadsBook
+from goodreads_secrets import key
 from log_utils import setup_logging
 
 coloredlogs.install()
