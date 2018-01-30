@@ -13,6 +13,8 @@ from Levenshtein import distance
 from typing import Iterator, List, Optional
 
 from goodreads_secrets import key
+from book import GoodreadsBook
+from log_utils import setup_logging
 
 coloredlogs.install()
 
@@ -50,18 +52,8 @@ def search_for_book(title: str):
         return root
 
 
-class Book:
-    def __init__(self, title: str, author: str, num_ratings: int, original_publication_year: int, str_distance: int,
-            node) -> None:
-        self.title = title
-        self.author = author
-        self.num_ratings = num_ratings
-        self.original_publication_year = original_publication_year
-        self.str_distance = str_distance
-        self.node=node
 
-
-def suggest_book_from_results(searched_title: str, root) -> List[Book]:
+def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
     """
     :param recommendation:          ET.Element
     """
@@ -79,7 +71,7 @@ def suggest_book_from_results(searched_title: str, root) -> List[Book]:
         str_distance = distance(searched_title.lower(), result_title.lower())
         # heuristic
         if str_distance < 50 and num_ratings > 100:
-            relevant_books.append(Book(**{
+            relevant_books.append(GoodreadsBook(**{
                 "title": result_title,
                 "author": author,
                 "num_ratings": num_ratings,
@@ -111,7 +103,7 @@ def get_books_from_file(fname: str) -> Iterator[str]:
             yield line
 
 
-def get_obviously_correct_book(relevant_books: List[Book]) -> Optional[Book]:
+def get_obviously_correct_book(relevant_books: List[GoodreadsBook]) -> Optional[GoodreadsBook]:
     """
     A book is obviously correct iff
     - has >= 100x more reviews than any other book; AND
@@ -135,18 +127,7 @@ def get_obviously_correct_book(relevant_books: List[Book]) -> Optional[Book]:
         return None
 
 
-def setup_logging(verbose: bool = True) -> None:
-    if verbose:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-    logging.basicConfig(level=log_level,
-            format="[%(name)s %(levelname)s] %(message)s")
-    for module in ["requests"]:
-        logging.getLogger(module).setLevel(logging.WARNING)
-
-
-def resolve_via_human(query: str, relevant_books: List[Book]) -> Book:
+def resolve_via_human(query: str, relevant_books: List[GoodreadsBook]) -> GoodreadsBook:
     print("Found {} good results for '{}'".format(
         len(relevant_books),
         query
@@ -161,7 +142,7 @@ def resolve_via_human(query: str, relevant_books: List[Book]) -> Book:
     return relevant_books[int(answer) - 1]
 
 
-def save_chosen_books(person: str, chosen_books: List[Book]) -> None:
+def save_chosen_books(person: str, chosen_books: List[GoodreadsBook]) -> None:
     fname = get_output_fname(person)
     with open(fname, "w") as fp:
         writer = csv.writer(fp, quotechar='"', delimiter=',')
