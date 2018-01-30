@@ -28,7 +28,6 @@ def search_for_book(title: str):
     goodreads_cache_fname = "data/goodreads-cache/{}.xml".format(
         title.lower().replace(" ", "_")
     )
-
     # check the cache
     if os.path.exists(goodreads_cache_fname):
         logging.debug("Hit the cache")
@@ -50,7 +49,6 @@ def search_for_book(title: str):
         tree = ET.ElementTree(root)
         tree.write(goodreads_cache_fname)
         return root
-
 
 
 def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
