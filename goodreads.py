@@ -50,7 +50,18 @@ def search_for_book(title: str):
         return root
 
 
-def suggest_book_from_results(searched_title: str, root):
+class Book:
+    def __init__(self, title: str, author: str, num_ratings: int, original_publication_year: int, str_distance: int,
+            node) -> None:
+        self.title = title
+        self.author = author
+        self.num_ratings = num_ratings
+        self.original_publication_year = original_publication_year
+        self.str_distance = str_distance
+        self.node=node
+
+
+def suggest_book_from_results(searched_title: str, root) -> List[Book]:
     """
     :param recommendation:          ET.Element
     """
@@ -68,14 +79,14 @@ def suggest_book_from_results(searched_title: str, root):
         str_distance = distance(searched_title.lower(), result_title.lower())
         # heuristic
         if str_distance < 50 and num_ratings > 100:
-            relevant_books.append({
+            relevant_books.append(Book(**{
                 "title": result_title,
                 "author": author,
                 "num_ratings": num_ratings,
                 "original_publication_year": pub_year,
                 "str_distance": str_distance,
                 "node": work_elem
-            })
+            }))
         else:
             # logging.debug("Skipping title")
             continue
@@ -84,9 +95,9 @@ def suggest_book_from_results(searched_title: str, root):
     # filter out those that don't have that many ratings compared to leading candidates
     max_num_ratings = 0
     for b in relevant_books:
-        if b["num_ratings"] > max_num_ratings:
-            max_num_ratings = b["num_ratings"]
-    relevant_books = [b for b in relevant_books if b["num_ratings"] >= (max_num_ratings / 100) ]
+        if b.num_ratings > max_num_ratings:
+            max_num_ratings = b.num_ratings
+    relevant_books = [b for b in relevant_books if b.num_ratings >= (max_num_ratings / 100) ]
     logging.debug("Found %d relevant results" % len(relevant_books))
     return relevant_books
 
@@ -100,7 +111,7 @@ def get_books_from_file(fname: str) -> Iterator[str]:
             yield line
 
 
-def get_obviously_correct_book(relevant_books: List[dict]) -> Optional[dict]:
+def get_obviously_correct_book(relevant_books: List[Book]) -> Optional[Book]:
     """
     A book is obviously correct iff
     - has >= 100x more reviews than any other book; AND
@@ -109,22 +120,22 @@ def get_obviously_correct_book(relevant_books: List[dict]) -> Optional[dict]:
     max_num_ratings = 0
     target = None
     for b in relevant_books:
-        if b["num_ratings"] > max_num_ratings:
-            max_num_ratings = b["num_ratings"]
+        if b.num_ratings > max_num_ratings:
+            max_num_ratings = b.num_ratings
             target = b
     for b in relevant_books:
         if b == target:
             continue
-        if b["num_ratings"] * 100 > target["num_ratings"]:
+        if b.num_ratings * 100 > target.num_ratings:
             return None
     # here we have a runaway winner, so just need to check that it has a good string similarity
-    if target["str_distance"] < 10:
+    if target.str_distance < 10:
         return target
     else:
         return None
 
 
-def setup_logging(verbose=True):
+def setup_logging(verbose: bool = True) -> None:
     if verbose:
         log_level = logging.DEBUG
     else:
@@ -135,14 +146,14 @@ def setup_logging(verbose=True):
         logging.getLogger(module).setLevel(logging.WARNING)
 
 
-def resolve_via_human(query: str, relevant_books: List[dict]):
+def resolve_via_human(query: str, relevant_books: List[Book]) -> Book:
     print("Found {} good results for '{}'".format(
         len(relevant_books),
         query
     ))
     for i, book in enumerate(relevant_books):
         print("{}. {title} (by {author})".format(
-            i + 1, title=book["title"], author=book["author"]
+            i + 1, title=book.title, author=book.author
         ))
     answer = ""
     while answer == "" or not answer.isdigit() or answer == "0":
@@ -150,13 +161,13 @@ def resolve_via_human(query: str, relevant_books: List[dict]):
     return relevant_books[int(answer) - 1]
 
 
-def save_chosen_books(person: str, chosen_books: List[dict]):
+def save_chosen_books(person: str, chosen_books: List[Book]) -> None:
     fname = get_output_fname(person)
     with open(fname, "w") as fp:
         writer = csv.writer(fp, quotechar='"', delimiter=',')
         writer.writerow(["title", "author", "year"])
         for book in chosen_books:
-            writer.writerow([book["title"], book["author"], book["original_publication_year"]])
+            writer.writerow([book.title, book.author, book.original_publication_year])
     logging.info("Saved choices in %s" % fname)
 
 
@@ -169,6 +180,14 @@ def get_output_fname(person: str) -> str:
         person=person.lower().replace(" ", "_")
     )
     return fname
+
+
+def confirm(msg: str) -> bool:
+    user_in = ""
+    while user_in not in ["y", "n"]:
+        print(msg)
+        user_in = input("y/n > ")
+    return user_in == "y"
 
 
 if __name__ == "__main__":
@@ -184,10 +203,7 @@ if __name__ == "__main__":
     output_fname = get_output_fname(args.person)
     if os.path.exists(output_fname):
         print("Resolved picks file already exists for {}".format(args.person))
-        user_in = ""
-        while user_in not in ["y", "n"]:
-            user_in = input("Continue? (y/n) > ")
-        if user_in == "n":
+        if not confirm("Continue?"):
             raise SystemExit()
     for book in get_books_from_file(args.book_file):
         logging.info("Searching for '%s' on goodreads..." % book)
@@ -196,7 +212,9 @@ if __name__ == "__main__":
         if relevant_books == []:
             print("WARNING: no results for query '%s'" % book)
             print("Possible typo?")
-            raise SystemExit()
+            if not confirm("Skip (no exits the program)"):
+                raise SystemExit()
+            # basically not skipping will write
         elif len(relevant_books) == 1:
             candidate = relevant_books[0]
         else:

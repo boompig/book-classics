@@ -92,3 +92,4 @@ ENV/
 # -----
 goodreads_secrets.py
 data
+.mypy_cache
