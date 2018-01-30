@@ -29,7 +29,7 @@ def search_for_book(title: str):
     )
     # check the cache
     if os.path.exists(goodreads_cache_fname):
-        logging.debug("Hit the cache")
+        logging.debug("Hit the Goodreads API XML cache")
         with open(goodreads_cache_fname) as fp:
             contents = fp.read()
             return ET.fromstring(contents)
@@ -179,17 +179,27 @@ def confirm(msg: str) -> bool:
 class GoodreadsResolutionCache:
     FNAME = "data/goodreads-resolution-cache.dat"
 
-    def __init__(self):
-        self.cache = {}
+    def __init__(self, cache: dict = {}, is_dirty: bool = True):
+        """
+        :param cache:       Can start with a pre-populated cache
+        :param is_dirty:    Set to true by default.
+                            If false, will not write to disk unless changes are made.
+        """
+        self.cache = cache
+        self.is_dirty = is_dirty
 
     @staticmethod
     def load() -> "GoodreadsResolutionCache":
         with open(GoodreadsResolutionCache.FNAME, "rb") as fp:
-            return pickle.load(fp)
+            cache = pickle.load(fp)
+            return GoodreadsResolutionCache(cache, is_dirty=False)
 
     def save(self) -> None:
-        with open(GoodreadsResolutionCache.FNAME, "wb") as fp:
-            pickle.dump(self, fp)
+        if self.is_dirty:
+            logging.debug("Saved Goodreads resolution cache to disk")
+            with open(GoodreadsResolutionCache.FNAME, "wb") as fp:
+                pickle.dump(self.cache, fp)
+            self.is_dirty = False
 
     def __contains__(self, search_str: str) -> bool:
         return search_str in self.cache
@@ -199,6 +209,7 @@ class GoodreadsResolutionCache:
             self.cache[search_str] = {}
         self.cache[search_str]["goodreads_id"] = goodreads_id
         self.cache[search_str]["book"] = book
+        self.is_dirty = True
 
     def get_book(self, search_str: str) -> GoodreadsBook:
         return self.cache[search_str]["book"]
@@ -253,7 +264,6 @@ if __name__ == "__main__":
                     candidate = resolve_via_human(book, relevant_books)
             goodreads_resolution_cache.save_title_resolution(book, candidate.get_goodreads_id(), candidate)
             goodreads_resolution_cache.save()
-            logging.debug("Saved resolution cache")
             chosen_books.append(candidate)
 
     # create the candidates pool
