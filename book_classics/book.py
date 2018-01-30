@@ -24,3 +24,6 @@ class GoodreadsBook(Book):
         )
         self.num_ratings = num_ratings
         self.node = node
+
+    def get_goodreads_id(self) -> int:
+        return int(self.node.find("id").text)

@@ -1,13 +1,13 @@
 from __future__ import print_function
 
-# from pprint import pprint
 import csv
 import logging
 import os
+import pickle
 import xml.etree.ElementTree as ET
 from argparse import ArgumentParser
+# from pprint import pprint
 
-import coloredlogs
 import requests
 from Levenshtein import distance
 from typing import Iterator, List, Optional
@@ -16,7 +16,6 @@ from book import GoodreadsBook
 from goodreads_secrets import key
 from log_utils import setup_logging
 
-coloredlogs.install()
 
 
 def search_for_book(title: str):
@@ -69,14 +68,15 @@ def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
         str_distance = distance(searched_title.lower(), result_title.lower())
         # heuristic
         if str_distance < 50 and num_ratings > 100:
-            relevant_books.append(GoodreadsBook(**{
-                "title": result_title,
-                "author": author,
-                "num_ratings": num_ratings,
-                "original_publication_year": pub_year,
-                "str_distance": str_distance,
-                "node": work_elem
-            }))
+            # print(ET.dump(work_elem))
+            relevant_books.append(GoodreadsBook(
+                title= result_title,
+                author= author,
+                num_ratings= num_ratings,
+                original_publication_year= pub_year,
+                str_distance= str_distance,
+                node= work_elem,
+            ))
         else:
             # logging.debug("Skipping title")
             continue
@@ -90,7 +90,7 @@ def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
             max_num_ratings = b.num_ratings
     relevant_books = [b for b in relevant_books
                       if b.num_ratings >= (max_num_ratings / 100)]
-    logging.debug("Found %d relevant results" % len(relevant_books))
+    logging.debug("Found %d relevant results", len(relevant_books))
     return relevant_books
 
 
@@ -154,7 +154,7 @@ def save_chosen_books(person: str, chosen_books: List[GoodreadsBook]) -> None:
                 book.author,
                 book.original_publication_year
             ])
-    logging.info("Saved choices in %s" % fname)
+    logging.info("Saved choices in %s", fname)
 
 
 def get_output_fname(person: str) -> str:
@@ -176,6 +176,34 @@ def confirm(msg: str) -> bool:
     return user_in == "y"
 
 
+class GoodreadsResolutionCache:
+    FNAME = "data/goodreads-resolution-cache.dat"
+
+    def __init__(self):
+        self.cache = {}
+
+    @staticmethod
+    def load() -> "GoodreadsResolutionCache":
+        with open(GoodreadsResolutionCache.FNAME, "rb") as fp:
+            return pickle.load(fp)
+
+    def save(self) -> None:
+        with open(GoodreadsResolutionCache.FNAME, "wb") as fp:
+            pickle.dump(self, fp)
+
+    def __contains__(self, search_str: str) -> bool:
+        return search_str in self.cache
+
+    def save_title_resolution(self, search_str: str, goodreads_id: int, book: GoodreadsBook) -> None:
+        if search_str not in self.cache:
+            self.cache[search_str] = {}
+        self.cache[search_str]["goodreads_id"] = goodreads_id
+        self.cache[search_str]["book"] = book
+
+    def get_book(self, search_str: str) -> GoodreadsBook:
+        return self.cache[search_str]["book"]
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("-p", "--person", required=True,
@@ -187,31 +215,46 @@ if __name__ == "__main__":
     setup_logging(not args.quiet)
     chosen_books = []
     output_fname = get_output_fname(args.person)
+    try:
+        goodreads_resolution_cache = GoodreadsResolutionCache.load()
+    except IOError:
+        goodreads_resolution_cache = GoodreadsResolutionCache()
+        goodreads_resolution_cache.save()
     if os.path.exists(output_fname):
-        print("Resolved picks file already exists for {}".format(args.person))
-        if not confirm("Continue?"):
+        print("Resolved picks file already exists for {}.".format(args.person))
+        if not confirm("Overwrite?"):
             raise SystemExit()
     for book in get_books_from_file(args.book_file):
-        logging.info("Searching for '%s' on goodreads..." % book)
-        root = search_for_book(book)
-        relevant_books = suggest_book_from_results(book, root)
-        if relevant_books == []:
-            print("WARNING: no results for query '%s'" % book)
-            print("Possible typo?")
-            if not confirm("Skip (no exits the program)"):
-                raise SystemExit()
-            # basically not skipping will write
-        elif len(relevant_books) == 1:
-            candidate = relevant_books[0]
-        else:
-            candidate = get_obviously_correct_book(relevant_books)
-            if candidate:
-                logging.debug("We have a winner!")
-                # pprint(candidate)
-            else:
-                logging.debug("No obviously correct book")
-                candidate = resolve_via_human(book, relevant_books)
-                # print(candidate)
+        # the 'book' is actually a query
+        if book in goodreads_resolution_cache:
+            logging.info("Found '%s' in Goodreads resolution cache", book)
+            candidate = goodreads_resolution_cache.get_book(book)
             chosen_books.append(candidate)
+        else:
+            logging.info("Searching for '%s' on goodreads...", book)
+            root = search_for_book(book)
+            relevant_books = suggest_book_from_results(book, root)
+            if relevant_books == []:
+                print("WARNING: no results for query '%s'", book)
+                print("Possible typo?")
+                if confirm("Skip (no exits the program)"):
+                    continue
+                else:
+                    raise SystemExit()
+                # basically not skipping will write
+            elif len(relevant_books) == 1:
+                candidate = relevant_books[0]
+            else:
+                candidate = get_obviously_correct_book(relevant_books)
+                if candidate:
+                    logging.debug("We have a winner!")
+                else:
+                    logging.debug("No obviously correct book")
+                    candidate = resolve_via_human(book, relevant_books)
+            goodreads_resolution_cache.save_title_resolution(book, candidate.get_goodreads_id(), candidate)
+            goodreads_resolution_cache.save()
+            logging.debug("Saved resolution cache")
+            chosen_books.append(candidate)
+
     # create the candidates pool
     save_chosen_books(args.person, chosen_books)
