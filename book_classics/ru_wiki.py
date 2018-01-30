@@ -4,7 +4,8 @@ This is an interface to query Russian-language wikipedia
 I have found the following:
 
 - wikipedia's python bindings don't support non-English pages
-- while search works for Russian-language wikipedia, there is no support for using the API to actually get the page content
+- while search works for Russian-language wikipedia,
+there is no support for using the API to actually get the page content
 """
 
 import logging
@@ -32,12 +33,6 @@ base_url_info_api = "https://ru.wikipedia.org/api/rest_v1"
 # base_url_info = "https://en.wikipedia.org/api/rest_v1"
 base_url_html = "https://ru.wikipedia.org/wiki"
 
-
-def foo():
-    pass
-    # r = requests.get(base_url_info + "/page/html/{}".format(
-        # urllib.parse.quote_plus(page_title.replace(" ", "_"))
-    # ))
 
 def search_wikipedia_curl(search: str):
     # perform a search to find the article
@@ -193,4 +188,3 @@ if __name__ == "__main__":
     infobox = get_infobox_from_html(html)
     book = book_from_infobox(infobox, search_str)
     print(book)
-
