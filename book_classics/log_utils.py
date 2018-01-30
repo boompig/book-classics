@@ -7,6 +7,6 @@ def setup_logging(verbose: bool = True) -> None:
     else:
         log_level = logging.INFO
     logging.basicConfig(level=log_level,
-            format="[%(name)s %(levelname)s] %(message)s")
+                        format="[%(name)s %(levelname)s] %(message)s")
     for module in ["requests"]:
         logging.getLogger(module).setLevel(logging.WARNING)
