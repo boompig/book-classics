@@ -151,6 +151,16 @@ def resolve_via_human(query: str, relevant_books: List[dict]):
 
 
 def save_chosen_books(person: str, chosen_books: List[dict]):
+    fname = get_output_fname(person)
+    with open(fname, "w") as fp:
+        writer = csv.writer(fp, quotechar='"', delimiter=',')
+        writer.writerow(["title", "author", "year"])
+        for book in chosen_books:
+            writer.writerow([book["title"], book["author"], book["original_publication_year"]])
+    logging.info("Saved choices in %s" % fname)
+
+
+def get_output_fname(person: str) -> str:
     dir = "data/resolved-picks"
     if not os.path.exists(dir):
         os.mkdir(dir)
@@ -158,12 +168,7 @@ def save_chosen_books(person: str, chosen_books: List[dict]):
         dir=dir,
         person=person.lower().replace(" ", "_")
     )
-    with open(fname, "w") as fp:
-        writer = csv.writer(fp, quotechar='"', delimiter=',')
-        writer.writerow(["title", "author", "year"])
-        for book in chosen_books:
-            writer.writerow([book["title"], book["author"], book["original_publication_year"]])
-    logging.info("Saved choices in %s" % fname)
+    return fname
 
 
 if __name__ == "__main__":
@@ -176,6 +181,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     setup_logging(not args.quiet)
     chosen_books = []
+    output_fname = get_output_fname(args.person)
+    if os.path.exists(output_fname):
+        print("Resolved picks file already exists for {}".format(args.person))
+        user_in = ""
+        while user_in not in ["y", "n"]:
+            user_in = input("Continue? (y/n) > ")
+        if user_in == "n":
+            raise SystemExit()
     for book in get_books_from_file(args.book_file):
         logging.info("Searching for '%s' on goodreads..." % book)
         root = search_for_book(book)
@@ -184,6 +197,8 @@ if __name__ == "__main__":
             print("WARNING: no results for query '%s'" % book)
             print("Possible typo?")
             raise SystemExit()
+        elif len(relevant_books) == 1:
+            candidate = relevant_books[0]
         else:
             candidate = get_obviously_correct_book(relevant_books)
             if candidate:
