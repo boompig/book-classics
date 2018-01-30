@@ -166,7 +166,6 @@ class WikiCache:
         return self.cache[search_str]["html_file"]
 
 
-
 if __name__ == "__main__":
     setup_logging()
     parser = ArgumentParser()
