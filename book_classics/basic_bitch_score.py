@@ -117,7 +117,7 @@ def get_all_book_titles(all_people: List[str]) -> List[dict]:
 
 
 if __name__ == "__main__":
-    setup_logging(verbose=True)
+    setup_logging(verbose=False)
     # when None it means everyone
     cohort = None
     all_people = [person for person in get_all_people()]
@@ -127,5 +127,6 @@ if __name__ == "__main__":
         logging.error("Books not unique, stopping computation")
         raise SystemExit()
     scores = get_basic_bitch_scores(all_people)
-    for person, score in scores.items():
+    for person in sorted(scores, key=scores.get, reverse=True):
+        score = scores[person]
         print("%s -> %.3f" % (person, score))
