@@ -72,12 +72,12 @@ def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
         if str_distance < 50 and num_ratings > 100:
             # print(ET.dump(work_elem))
             relevant_books.append(GoodreadsBook(
-                title= result_title,
-                author= author,
-                num_ratings= num_ratings,
-                original_publication_year= pub_year,
-                str_distance= str_distance,
-                node= work_elem,
+                title=result_title,
+                author=author,
+                num_ratings=num_ratings,
+                original_publication_year=pub_year,
+                str_distance=str_distance,
+                node=work_elem,
             ))
         else:
             # logging.debug("Skipping title")
