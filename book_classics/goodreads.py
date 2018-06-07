@@ -22,7 +22,10 @@ RESOLVED_PICKS_DIR = "data/resolved-picks"
 
 
 def search_for_book(title: str) -> ET.Element:
-    """:return ET.Element"""
+    """
+    Search for the book with the given title on goodreads
+    Write the output to the directory GOODREADS_CACHE_DIR
+    :return ET.Element"""
     if not os.path.exists(GOODREADS_CACHE_DIR):
         os.makedirs(GOODREADS_CACHE_DIR)
     goodreads_cache_fname = os.path.join(
@@ -48,8 +51,13 @@ def search_for_book(title: str) -> ET.Element:
         root = ET.fromstring(response)
         # write the data
         tree = ET.ElementTree(root)
-        tree.write(goodreads_cache_fname)
-        return root
+        try:
+            tree.write(goodreads_cache_fname)
+            return root
+        except Exception as e:
+            print(response)
+            print(tree)
+            raise e
 
 
 def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
@@ -100,6 +108,9 @@ def get_books_from_file(fname: str) -> Iterator[str]:
     logging.debug("Loading books from file %s", fname)
     with open(fname) as fp:
         for line in fp:
+            if line.startswith("# "):
+                # consider these comments
+                continue
             line = line.strip()
             if line == "":
                 continue
@@ -141,8 +152,10 @@ def resolve_via_human(query: str, relevant_books: List[GoodreadsBook]) -> Goodre
             i + 1, title=book.title, author=book.author
         ))
     answer = ""
-    while answer == "" or not answer.isdigit() or answer == "0":
-        answer = input("Which is the right one? ")
+    while answer == "" or not answer.isdigit():
+        answer = input("Which is the right one? Enter '0' if none of the above. ")
+        if answer == "0":
+            raise NoBookSelectedException()
     return relevant_books[int(answer) - 1]
 
 
@@ -217,7 +230,38 @@ class GoodreadsResolutionCache:
         return self.cache[search_str]["book"]
 
 
-def main(args):
+class GoodreadsResolutionException(Exception):
+    """General exception for this module"""
+    pass
+
+
+class NoCacheOverrideException(GoodreadsResolutionException):
+    """This exception is raised when a cache exists for a person
+    and the user chooses to not override it"""
+    pass
+
+
+class NoBookSelectedException(GoodreadsResolutionException):
+    """This exception is raised when a book title was found on Goodreads
+    but none of the choices are right (according to the user)"""
+    pass
+
+
+def skip_or_exit() -> bool:
+    """If skip then return true
+    Otherwise system exit"""
+    if confirm("Skip (no exits the program)"):
+        return True
+    else:
+        raise SystemExit()
+
+
+def main(args) -> bool:
+    """
+    Perform book resolution using goodreads and the command line for the given person
+    :return:        If the resolution cache exists, return true iff it has been override
+                    If it does *not* exist, return true
+    """
     setup_logging(not args.quiet)
     chosen_books = []
     output_fname = get_output_fname(args.person)
@@ -227,9 +271,12 @@ def main(args):
         goodreads_resolution_cache = GoodreadsResolutionCache()
         goodreads_resolution_cache.save()
     if os.path.exists(output_fname):
+        if args.always_use_cache:
+            logging.warning("Resolved picks file already exists for %s. Not overwriting.", args.person)
+            raise NoCacheOverrideException()
         print("Resolved picks file already exists for {}.".format(args.person))
         if not confirm("Overwrite?"):
-            raise SystemExit()
+            raise NoCacheOverrideException()
     for book in get_books_from_file(args.book_file):
         # the 'book' is actually a query
         if book in goodreads_resolution_cache:
@@ -241,12 +288,10 @@ def main(args):
             root = search_for_book(book)
             relevant_books = suggest_book_from_results(book, root)
             if relevant_books == []:
-                print("WARNING: no results for query '%s'", book)
+                print("WARNING: no results for query \"{}\"".format(book))
                 print("Possible typo?")
-                if confirm("Skip (no exits the program)"):
+                if skip_or_exit():
                     continue
-                else:
-                    raise SystemExit()
                 # basically not skipping will write
             elif len(relevant_books) == 1:
                 candidate = relevant_books[0]
@@ -256,13 +301,18 @@ def main(args):
                     logging.debug("We have a winner!")
                 else:
                     logging.debug("No obviously correct book")
-                    candidate = resolve_via_human(book, relevant_books)
+                    try:
+                        candidate = resolve_via_human(book, relevant_books)
+                    except NoBookSelectedException:
+                        if skip_or_exit():
+                            continue
+
             goodreads_resolution_cache.save_title_resolution(book, candidate.get_goodreads_id(), candidate)
             goodreads_resolution_cache.save()
             chosen_books.append(candidate)
-
     # create the candidates pool
     save_chosen_books(args.person, chosen_books)
+    return True
 
 
 if __name__ == "__main__":
@@ -272,5 +322,10 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--book-file", required=True,
                         help="File which contains names of books, one per line")
     parser.add_argument("-q", "--quiet", action="store_true")
+    parser.add_argument("--always-use-cache", action="store_true", default=False,
+                        help="Never ask to overwrite the resolution cache for a person")
     args = parser.parse_args()
-    main(args)
+    try:
+        main(args)
+    except GoodreadsResolutionException:
+        raise SystemExit()
