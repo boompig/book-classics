@@ -181,7 +181,7 @@ def confirm(msg: str) -> bool:
 class GoodreadsResolutionCache:
     FNAME = "data/goodreads-resolution-cache.dat"
 
-    def __init__(self, cache: dict = {}, is_dirty: bool = True):
+    def __init__(self, cache: dict = {}, is_dirty: bool = True) -> None:
         """
         :param cache:       Can start with a pre-populated cache
         :param is_dirty:    Set to true by default.
