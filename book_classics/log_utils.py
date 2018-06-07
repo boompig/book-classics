@@ -11,5 +11,5 @@ def setup_logging(verbose: bool = True) -> None:
     logging.basicConfig(level=log_level,
                         format="[%(name)s %(levelname)s] %(message)s")
     coloredlogs.install(level=log_level)
-    for module in ["requests"]:
+    for module in ["requests", "urllib3"]:
         logging.getLogger(module).setLevel(logging.WARNING)

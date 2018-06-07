@@ -17,15 +17,17 @@ from goodreads_secrets import key
 from log_utils import setup_logging
 
 
+GOODREADS_CACHE_DIR = "data/goodreads-cache"
+RESOLVED_PICKS_DIR = "data/resolved-picks"
 
-def search_for_book(title: str):
+
+def search_for_book(title: str) -> ET.Element:
     """:return ET.Element"""
-    if not os.path.exists("data"):
-        os.mkdir("data")
-    if not os.path.exists("data/goodreads-cache"):
-        os.mkdir("data/goodreads-cache")
-    goodreads_cache_fname = "data/goodreads-cache/{}.xml".format(
-        title.lower().replace(" ", "_")
+    if not os.path.exists(GOODREADS_CACHE_DIR):
+        os.makedirs(GOODREADS_CACHE_DIR)
+    goodreads_cache_fname = os.path.join(
+        GOODREADS_CACHE_DIR,
+        "{}.xml".format(title.lower().replace(" ", "_"))
     )
     # check the cache
     if os.path.exists(goodreads_cache_fname):
@@ -95,6 +97,7 @@ def suggest_book_from_results(searched_title: str, root) -> List[GoodreadsBook]:
 
 
 def get_books_from_file(fname: str) -> Iterator[str]:
+    logging.debug("Loading books from file %s", fname)
     with open(fname) as fp:
         for line in fp:
             line = line.strip()
@@ -158,11 +161,10 @@ def save_chosen_books(person: str, chosen_books: List[GoodreadsBook]) -> None:
 
 
 def get_output_fname(person: str) -> str:
-    dir = "data/resolved-picks"
-    if not os.path.exists(dir):
-        os.mkdir(dir)
+    if not os.path.exists(RESOLVED_PICKS_DIR):
+        os.makedirs(RESOLVED_PICKS_DIR)
     fname = "{dir}/{person}.csv".format(
-        dir=dir,
+        dir=RESOLVED_PICKS_DIR,
         person=person.lower().replace(" ", "_")
     )
     return fname
@@ -215,14 +217,7 @@ class GoodreadsResolutionCache:
         return self.cache[search_str]["book"]
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument("-p", "--person", required=True,
-                        help="The person whose book picks these are")
-    parser.add_argument("-f", "--book-file", required=True,
-                        help="File which contains names of books, one per line")
-    parser.add_argument("-q", "--quiet", action="store_true")
-    args = parser.parse_args()
+def main(args):
     setup_logging(not args.quiet)
     chosen_books = []
     output_fname = get_output_fname(args.person)
@@ -242,7 +237,7 @@ if __name__ == "__main__":
             candidate = goodreads_resolution_cache.get_book(book)
             chosen_books.append(candidate)
         else:
-            logging.info("Searching for '%s' on goodreads...", book)
+            logging.info("Searching for '%s' on goodreads for person %s...", book, args.person)
             root = search_for_book(book)
             relevant_books = suggest_book_from_results(book, root)
             if relevant_books == []:
@@ -268,3 +263,14 @@ if __name__ == "__main__":
 
     # create the candidates pool
     save_chosen_books(args.person, chosen_books)
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("-p", "--person", required=True,
+                        help="The person whose book picks these are")
+    parser.add_argument("-f", "--book-file", required=True,
+                        help="File which contains names of books, one per line")
+    parser.add_argument("-q", "--quiet", action="store_true")
+    args = parser.parse_args()
+    main(args)
